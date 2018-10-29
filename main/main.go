@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
+	"encoding/hex"
 	"flag"
 	"math/rand"
 	"os"
@@ -24,6 +26,7 @@ func main() {
 	flag.Parse()
 	checkFlags(*input, *filters)
 	do(*input, *filters)
+
 }
 
 func do(input string, filters string) {
@@ -40,8 +43,18 @@ func checkFlags(input string, filters string) {
 	}
 }
 
-func clean(filename string) string {
+func GetMD5Hash(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func validateEmail(email string) bool {
 	emailRegexp := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	return emailRegexp.MatchString(email)
+}
+
+func clean(filename string) string {
 
 	//generateInput(filename)
 	read, err := os.Open(filename)
@@ -57,7 +70,7 @@ func clean(filename string) string {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if emailRegexp.MatchString(line) {
+		if validateEmail(line) {
 			write.Write([]byte(line + "\n"))
 		}
 	}
