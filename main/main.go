@@ -25,15 +25,58 @@ func main() {
 	filters := flag.String("filters", "", "Filter files")
 	flag.Parse()
 	checkFlags(*input, *filters)
-	do(*input, *filters)
+	supress(*input, *filters)
 
 }
 
-func do(input string, filters string) {
-	inputFile := "input"
-	cleanEmails, err := os.Open(clean(inputFile))
+func supress(input string, filters string) {
+	inputFile, err := os.Open(input)
 	check(err)
-	defer cleanEmails.Close()
+	defer inputFile.Close()
+
+	filterFiles := strings.Split(filters, " ")
+
+	match, err := os.Create("match.txt")
+	check(err)
+	defer match.Close()
+
+	clean, err := os.Create("clean.txt")
+	check(err)
+	defer clean.Close()
+
+	inputScanner := bufio.NewScanner(inputFile)
+
+	for inputScanner.Scan() {
+		line := inputScanner.Text()
+		linehash := GetMD5Hash(line)
+		found := false
+		if isEmail(line) {
+			for _, f := range filterFiles {
+				file, err := os.Open(f)
+				check(err)
+				defer file.Close()
+
+				fileScanner := bufio.NewScanner(file)
+
+				for fileScanner.Scan() {
+					fileLine := fileScanner.Text()
+
+					if fileLine == line || fileLine == linehash {
+						match.Write([]byte(line + "\n"))
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+
+			}
+			if !found {
+				clean.Write([]byte(line + "\n"))
+			}
+		}
+	}
 
 }
 
@@ -49,35 +92,34 @@ func GetMD5Hash(text string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func validateEmail(email string) bool {
+func isEmail(email string) bool {
 	emailRegexp := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 	return emailRegexp.MatchString(email)
 }
 
-func clean(filename string) string {
-
-	//generateInput(filename)
-	read, err := os.Open(filename)
-	check(err)
-	defer read.Close()
-
-	output := "clean" + strings.Title(filename)
-	write, err := os.Create(output)
-	check(err)
-	defer write.Close()
-
-	scanner := bufio.NewScanner(read)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if validateEmail(line) {
-			write.Write([]byte(line + "\n"))
-		}
-	}
-
-	return output
-}
-
+//func clean(filename string) string {
+//
+//	//generateInput(filename)
+//	read, err := os.Open(filename)
+//	check(err)
+//	defer read.Close()
+//
+//	output := "clean" + strings.Title(filename)
+//	write, err := os.Create(output)
+//	check(err)
+//	defer write.Close()
+//
+//	scanner := bufio.NewScanner(read)
+//
+//	for scanner.Scan() {
+//		line := scanner.Text()
+//		if isEmail(line) {
+//			write.Write([]byte(line + "\n"))
+//		}
+//	}
+//
+//	return output
+//}
 //func generateInput(filename string) string {
 //	f, err := os.Create(filename)
 //	check(err)
