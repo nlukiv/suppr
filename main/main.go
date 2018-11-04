@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"os"
 	"regexp"
@@ -12,35 +13,26 @@ import (
 	"time"
 )
 
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func main() {
 	//supress -input=input -filters="filter1 filter2 filter3"
 	//supress -input="input" -filters="f0 f1 f2 f3 f4 f5 f6 f7 f8 f9"
 	//supress -input="D:\\go\\input" -filters="D:\\go\\f0 f1 f2 f3 f4 f5 f6 f7 f8 f9"
 
-	input := "input"                     //"D:\\go\\inputSmall" //flag.String("input", "", "Input file")
-	filters := "filter1 filter2 filter3" //"D:\\go\\f0"       //flag.String("filters", "", "Filter files")
+	input := flag.String("input", "", "Input file")
+	filters := flag.String("filters", "", "Filter files")
 	//threads := 10                        //   flag.Int("threads", 1, "Threads")
-	//flag.Parse()
-	//checkFlags(*input, *filters)
-	start := time.Now()
+	flag.Parse()
+	checkFlags(*input, *filters)
 
 	var filterMap sync.Map
 
-	processFilters(filters, &filterMap)
-
-	//fmt.Println(filterMap)
-	supressionChannels(input, &filterMap)
-
+	start := time.Now()
+	filterPreProcessing(*filters, &filterMap)
+	searchInputInFilters(*input, &filterMap)
 	defer fmt.Println("Processing took: " + time.Since(start).String())
 
 }
-func processFilters(filters string, filterMap *sync.Map) {
+func filterPreProcessing(filters string, filterMap *sync.Map) {
 	var filterWG sync.WaitGroup
 	filterFiles := strings.Split(filters, " ")
 	filterWG.Add(len(filterFiles))
@@ -97,31 +89,14 @@ func writeResults(match <-chan string, clean <-chan string, wg *sync.WaitGroup) 
 
 }
 
-//func readInput(inputPath string, inputChannel chan string, wg *sync.WaitGroup) (<-chan string) {
-//	defer wg.Done()
-//	inputFile, err := os.Open(inputPath)
-//	check(err)
-//	defer inputFile.Close()
-//
-//	inputScanner := bufio.NewScanner(inputFile)
-//
-//	for inputScanner.Scan() {
-//		line := inputScanner.Text()
-//		if isEmail(line) {
-//			inputChannel <- line
-//		}
-//	}
-//	return inputChannel
-//}
-
-func supressionChannels(inputFileName string, filterMap *sync.Map) {
+func searchInputInFilters(inputFileName string, filterMap *sync.Map) {
 	var wg sync.WaitGroup
 	inputChannel := make(chan string, 10946)
 	matchChannel := make(chan string, 10946)
 	cleanChannel := make(chan string, 10946)
 
-	wg.Add(2)
 	//read input to inputChannel
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		inputFile, err := os.Open(inputFileName)
@@ -141,13 +116,13 @@ func supressionChannels(inputFileName string, filterMap *sync.Map) {
 
 	go writeResults(matchChannel, cleanChannel, &wg)
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer close(matchChannel)
 		defer close(cleanChannel)
 
 		for line := range inputChannel {
-
 			linehash := GetMD5Hash(line)
 
 			_, ok := filterMap.Load(line)
@@ -174,6 +149,12 @@ func supressionChannels(inputFileName string, filterMap *sync.Map) {
 func checkFlags(input string, filters string) {
 	if len(input) == 0 || len(filters) == 0 {
 		panic("Invalid input")
+	}
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
 	}
 }
 
